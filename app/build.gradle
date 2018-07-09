@@ -25,20 +25,19 @@ android {
 }
 
 dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
+    compile fileTree(include: ['*.jar'], dir: 'libs')
     androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
         exclude group: 'com.android.support', module: 'support-annotations'
     })
     compile 'com.android.support:appcompat-v7:26.+'
     compile 'com.android.support.constraint:constraint-layout:1.0.2'
     testCompile 'junit:junit:4.12'
-
     compile project(':butterknife-annotation')
-
     /**
      *  只在编译的时候执行依赖的库，但是库最终不会打包到apk中；
      *  编译库中的代码没有直接使用的意义，也没有提供开放的api调用，最终的目的是得到编译库中生成的文件，供我们调用；
      */
     annotationProcessor project(':butterknife-compiler')
-//    apt project(':butterknife-compiler')
+    //    apt project(':butterknife-compiler')
+    compile project(':butterknifer-core')
 }

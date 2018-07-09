@@ -20,10 +20,12 @@ import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeMirror;
 import javax.tools.JavaFileObject;
+import javax.xml.transform.Source;
 
 /**
  * Created by serenitynanian on 2018/7/6.
@@ -61,6 +63,20 @@ public class ButterKnifeProcess extends AbstractProcessor {
         //1.创建一个map集合，用来保存各个类中被bindView注解注释的成员变量
         //集合的key：全类名=包名+类名   value:被bindview注解注释的成员变量集合
         Map<String, List<VariableElement>> cacheMap = new HashMap<>();
+
+        //4.实现onClickListener时间的绑定
+        Set<? extends Element> elementsAnnotatedOnClick = roundEnvironment.getElementsAnnotatedWith(OnClick.class);
+        Map<String, List<ExecutableElement>> onClickCacheMap = new HashMap<>();
+        for (Element element : elementsAnnotatedOnClick) {
+            ExecutableElement executableElement = (ExecutableElement) element;
+            String wholeClassName = getWholeClassName(element);
+            List<ExecutableElement> executableElements = onClickCacheMap.get(wholeClassName);
+            if (null == executableElements) {
+                executableElements = new ArrayList<>();
+                onClickCacheMap.put(wholeClassName, executableElements);
+            }
+            executableElements.add(executableElement);
+        }
 
         //2.遍历被BindView注解注释的变量Set集合
         for (Element element : elementsAnnotatedWith) {
@@ -118,8 +134,36 @@ public class ButterKnifeProcess extends AbstractProcessor {
                     writer.write("\n");
                 }
 
+                //4.1 实现onClickListener事件方法的组装
+                List<ExecutableElement> executableElements = onClickCacheMap.get(wholeClassName);
+                for (ExecutableElement executableElement : executableElements) {
+                    OnClick onClick = executableElement.getAnnotation(OnClick.class);
+                    int viewId = onClick.value();
+                    String methodName = executableElement.getSimpleName().toString();
+                    System.out.println("-------------methodName----------->"+methodName);
+                    /**
+                     *  findViewById(R.id.tv_text).setOnClickListener(new View.OnClickListener() {
+                             @Override
+                            public void onClick(View v) {
 
-                System.out.println("-------------end------------");
+                            }
+                        });
+                     */
+                    writer.write("target.findViewById(" + viewId + ").setOnClickListener(new View.OnClickListener() {");
+                    writer.write("\n");
+                    writer.write("@Override");
+                    writer.write("\n");
+                    writer.write(" public void onClick(View v) {");
+                    writer.write("\n");
+                    writer.write("target."+methodName+"(v);");
+                    writer.write("\n");
+                    writer.write("}");
+                    writer.write("\n");
+                    writer.write("});");
+                    writer.write("\n");
+                }
+
+
                 //3.9 组装java的结尾部分
                 writer.write("\n");
                 writer.write("}");
@@ -141,13 +185,15 @@ public class ButterKnifeProcess extends AbstractProcessor {
         try {
             writer.write("package "+packageName+";");
             writer.write("\n");
-            writer.write("import com.serenity.viewinject_butterknife.ViewBinder;");
+            writer.write("import com.example.ViewBinder;");
+            writer.write("\n");
+            writer.write("import android.view.View;");
             writer.write("\n");
 
             writer.write("public class "+simpleClassName+" implements ViewBinder<"+wholeClassName+"> {");
 
             writer.write("\n");
-            writer.write(" public void bind("+wholeClassName+" target) {");
+            writer.write(" public void bind(final "+wholeClassName+" target) {");
             writer.write("\n");
 
         } catch (IOException e) {
@@ -155,14 +201,14 @@ public class ButterKnifeProcess extends AbstractProcessor {
         }
     }
 
-    private String getPackageName(VariableElement variableElement) {
+    private String getPackageName(Element variableElement) {
         //得到父节点
         TypeElement enclosingElement = (TypeElement) variableElement.getEnclosingElement();
         String packageName = processingEnv.getElementUtils().getPackageOf(enclosingElement).getQualifiedName().toString();
         return packageName ;
     }
 
-    private String getWholeClassName(VariableElement variableElement) {
+    private String getWholeClassName(Element variableElement) {
         String packageName = getPackageName(variableElement);
         TypeElement enclosingElement = (TypeElement) variableElement.getEnclosingElement();
         String wholeClassName = packageName+"."+enclosingElement.getSimpleName().toString();
